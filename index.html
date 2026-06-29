@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>話者字幕 統合ツール</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root{
+  --bg:#1a1d23;
+  --panel:#22262e;
+  --panel2:#2b303a;
+  --line:#373d49;
+  --line2:#454c5a;
+  --ink:#e8eaed;
+  --ink2:#9aa3b0;
+  --ink3:#646c7a;
+  --go:#5eb88a;
+  --go-deep:#3f9b6e;
+  --acc:#9a86d6;       /* 統合ツールのアクセント（分離ツールと区別） */
+  --acc-deep:#7d68bd;
+  --warn:#d66a5e;
+  --radius:12px;
+  --palette0:#6ba3d6;
+  --palette1:#d69a5e;
+  --palette2:#7fc08a;
+  --palette3:#d67f9a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:'Zen Kaku Gothic New',sans-serif;
+  font-size:14px;line-height:1.6;min-height:100vh;padding:32px 20px 80px;
+}
+.wrap{max-width:620px;margin:0 auto}
+
+.head{margin-bottom:28px}
+.kicker{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;
+  color:var(--ink3);text-transform:uppercase;margin-bottom:8px}
+h1{font-size:23px;font-weight:700;letter-spacing:-0.3px;margin-bottom:6px}
+h1 .hl{color:var(--acc)}
+.lead{color:var(--ink2);font-size:13px}
+
+/* dropzone */
+.drop{
+  border:1.5px dashed var(--line2);border-radius:var(--radius);
+  background:var(--panel);padding:34px 24px;text-align:center;
+  cursor:pointer;transition:all .18s;margin-bottom:16px;
+}
+.drop:hover{border-color:var(--acc);background:var(--panel2)}
+.drop.drag{border-color:var(--acc);background:var(--panel2);transform:scale(1.005)}
+.drop-ico{font-size:28px;margin-bottom:10px;opacity:.85}
+.drop-main{font-size:15px;font-weight:500;margin-bottom:4px}
+.drop-sub{font-size:12px;color:var(--ink3);font-family:'JetBrains Mono',monospace}
+
+/* file list (speaker labels editable) */
+.files{margin-bottom:16px;display:none}
+.files.show{display:block}
+.files-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  color:var(--ink3);text-transform:uppercase;margin-bottom:12px}
+.fitem{
+  display:flex;align-items:center;gap:12px;
+  background:var(--panel);border:1px solid var(--line);
+  border-left-width:3px;border-radius:10px;padding:11px 14px;margin-bottom:9px;
+}
+.fitem .dot{width:0;flex-shrink:0}
+.fitem .meta{flex:1;min-width:0}
+.fitem .fname{font-size:12px;color:var(--ink3);font-family:'JetBrains Mono',monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px}
+.fitem .labwrap{display:flex;align-items:center;gap:8px}
+.fitem .labtag{font-size:11px;color:var(--ink3);flex-shrink:0}
+.fitem input.lab{
+  flex:1;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:7px;
+  color:var(--ink);font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;font-weight:500;
+  padding:7px 11px;outline:none;transition:border-color .15s;
+}
+.fitem input.lab:focus{border-color:var(--acc)}
+.fitem .rm{
+  width:30px;height:30px;border:1px solid var(--line2);border-radius:7px;background:var(--panel2);
+  color:var(--ink3);font-size:16px;cursor:pointer;flex-shrink:0;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;
+}
+.fitem .rm:hover{background:var(--warn);color:#fff;border-color:var(--warn)}
+.fitem .cap-n{font-size:11px;color:var(--ink3);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+
+/* options */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:14px;display:none}
+.panel.show{display:block}
+.panel-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  color:var(--ink3);text-transform:uppercase;margin-bottom:14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.row-text{flex:1;min-width:0}
+.row-title{font-size:14px;font-weight:500;margin-bottom:2px}
+.row-help{font-size:12px;color:var(--ink3)}
+.toggle{flex-shrink:0;cursor:pointer;display:inline-flex}
+.toggle input{display:none}
+.toggle .track{width:48px;height:28px;border-radius:14px;background:var(--line2);
+  position:relative;transition:background .18s;display:block}
+.toggle .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+  background:var(--ink2);transition:all .18s}
+.toggle input:checked + .track{background:var(--acc-deep)}
+.toggle input:checked + .track .knob{left:23px;background:#fff}
+
+/* run */
+.run{width:100%;border:none;border-radius:var(--radius);background:var(--acc);color:#1b1430;
+  font-family:'Zen Kaku Gothic New',sans-serif;font-size:15px;font-weight:700;
+  padding:15px;cursor:pointer;transition:all .15s;letter-spacing:.5px;display:none}
+.run.show{display:block}
+.run:hover:not(:disabled){background:var(--acc-deep);color:#fff}
+.run:active:not(:disabled){transform:scale(.99)}
+.run:disabled{background:var(--panel2);color:var(--ink3);cursor:not-allowed}
+
+/* result */
+.result{margin-top:18px;display:none}
+.result.show{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.result-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.result-title{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  color:var(--ink3);text-transform:uppercase}
+.dl{border:1px solid var(--acc);border-radius:8px;background:var(--acc);color:#1b1430;
+  font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;font-weight:600;
+  padding:9px 18px;cursor:pointer;transition:all .15s}
+.dl:hover{background:var(--acc-deep);color:#fff;border-color:var(--acc-deep)}
+.dl.done{background:var(--go-deep);color:#fff;border-color:var(--go-deep)}
+.preview{
+  background:#15171c;border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;max-height:340px;overflow-y:auto;
+  font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;color:var(--ink2);
+  white-space:pre-wrap;word-break:break-word;
+}
+.preview .tc{color:var(--ink3)}
+.preview .lab0{color:var(--palette0);font-weight:600}
+.preview .lab1{color:var(--palette1);font-weight:600}
+.preview .lab2{color:var(--palette2);font-weight:600}
+.preview .lab3{color:var(--palette3);font-weight:600}
+.stat{font-size:12px;color:var(--ink3);margin-top:10px;font-family:'JetBrains Mono',monospace}
+
+.err{background:rgba(214,106,94,.1);border:1px solid var(--warn);border-radius:10px;
+  padding:12px 15px;margin-top:14px;color:#e8a99f;font-size:13px;display:none}
+.err.show{display:block}
+
+.foot{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);
+  font-size:12px;color:var(--ink3);line-height:1.7}
+.foot code{font-family:'JetBrains Mono',monospace;color:var(--ink2);background:var(--panel);
+  padding:1px 6px;border-radius:4px;font-size:11px}
+.foot b{color:var(--ink2);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="kicker">Premiere txt → merged transcript</div>
+    <h1>話者字幕 <span class="hl">統合</span>ツール</h1>
+    <p class="lead">Premiereから話者（トラック）ごとに書き出したtxtを、タイムコード順に1本へまとめます。各発言に話者ラベルが付きます。</p>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept=".txt,text/plain" multiple hidden>
+    <div class="drop-ico">⇊</div>
+    <div class="drop-main">話者ごとのtxtをドラッグ（複数可）</div>
+    <div class="drop-sub">Premiereのトラック単位のテキスト書き出し</div>
+  </div>
+
+  <div class="files" id="files">
+    <div class="files-label">読み込んだファイル ・ ラベルは編集できます</div>
+    <div id="fileList"></div>
+  </div>
+
+  <div class="panel" id="opts">
+    <div class="panel-label">出力設定</div>
+    <div class="row">
+      <div class="row-text">
+        <div class="row-title">発言の間に空行を入れる</div>
+        <div class="row-help">読みやすさ優先ならオン（既定オン）</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="blank" checked>
+        <span class="track"><span class="knob"></span></span>
+      </label>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <div class="row-text">
+        <div class="row-title">ラベルを [ ] で囲む</div>
+        <div class="row-help">オフだと「ラベル：本文」の形式（既定オン）</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="bracket" checked>
+        <span class="track"><span class="knob"></span></span>
+      </label>
+    </div>
+  </div>
+
+  <button class="run" id="run">統合して書き出す</button>
+
+  <div class="err" id="err"></div>
+
+  <div class="result" id="result">
+    <div class="result-head">
+      <span class="result-title">統合結果</span>
+      <button class="dl" id="dl">ダウンロード</button>
+    </div>
+    <div class="preview" id="preview"></div>
+    <div class="stat" id="stat"></div>
+  </div>
+
+  <div class="foot">
+    <b>使い方</b>　Premiereで各話者トラックを<b>txtで書き出し</b>（出力はcsv/txtのみ）。話者1.txt・話者2.txt…をここに通すと、タイムコード順にまとまった1本ができます。ファイル名がそのまま話者ラベルになり、書き出し前に変更できます。<br>
+    タイムコードは元のフレーム形式（<code>HH:MM:SS:FF</code>）のまま。Premiere上のタイムコードと一致するので、シーン抜き出しや編集指示にそのまま使えます。
+  </div>
+
+</div>
+
+<script>
+// ===== パース =====
+// Premiere書き出しtxt: 「TC - TC」行 → テキスト行(1〜複数) → 空行 の繰り返し
+const TC_RE = /^(\d{2}:\d{2}:\d{2}:\d{2})\s*-\s*(\d{2}:\d{2}:\d{2}:\d{2})\s*$/;
+
+function tcKey(tc){
+  // "HH:MM:SS:FF" → 比較用の数値（fps非依存、同形式同士の順序のみ）
+  const [h,m,s,f] = tc.split(':').map(Number);
+  return ((h*60+m)*60+s)*1000 + f; // フレームは最大99想定、桁衝突しない範囲で十分
+}
+
+function parseTxt(text){
+  const lines = text.replace(/\r\n/g,'\n').replace(/\uFEFF/g,'').split('\n');
+  const caps = [];
+  let i = 0;
+  while(i < lines.length){
+    const m = lines[i].trim().match(TC_RE);
+    if(m){
+      const start = m[1], end = m[2];
+      const body = [];
+      let j = i+1;
+      while(j < lines.length && lines[j].trim() !== '' && !TC_RE.test(lines[j].trim())){
+        body.push(lines[j].trim());
+        j++;
+      }
+      caps.push({ start, end, text: body.join(''), key: tcKey(start) });
+      i = (j > i+1) ? j : i+1;
+    } else {
+      i++;
+    }
+  }
+  return caps;
+}
+
+// ===== state =====
+const $ = id => document.getElementById(id);
+let speakers = []; // { fname, label, caps:[] }
+
+const drop=$('drop'), fileInput=$('file');
+
+drop.addEventListener('click', ()=>fileInput.click());
+drop.addEventListener('dragover', e=>{e.preventDefault();drop.classList.add('drag')});
+drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+drop.addEventListener('drop', e=>{
+  e.preventDefault();drop.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e=>handleFiles(e.target.files));
+
+function showErr(msg){ $('err').textContent = msg; $('err').classList.add('show'); }
+function clearErr(){ $('err').classList.remove('show'); }
+
+function handleFiles(fileList){
+  clearErr();
+  $('result').classList.remove('show');
+  const arr = Array.from(fileList).filter(f=>/\.txt$/i.test(f.name));
+  if(!arr.length){ showErr('txtファイルが見つかりません。'); return; }
+
+  let pending = arr.length;
+  arr.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      const caps = parseTxt(ev.target.result);
+      const label = file.name.replace(/\.txt$/i,'');
+      if(caps.length === 0){
+        showErr(`「${file.name}」からキャプションを読み取れませんでした。タイムコード形式（HH:MM:SS:FF - HH:MM:SS:FF）を確認してください。`);
+      } else {
+        // 同名ファイルの重複を避ける
+        if(!speakers.some(s=>s.fname===file.name)){
+          speakers.push({ fname:file.name, label, caps });
+        }
+      }
+      pending--;
+      if(pending===0) renderFiles();
+    };
+    reader.readAsText(file);
+  });
+}
+
+function paletteClass(idx){ return 'lab'+(idx%4); }
+function paletteVar(idx){ return `var(--palette${idx%4})`; }
+
+function renderFiles(){
+  if(!speakers.length){ return; }
+  $('files').classList.add('show');
+  $('opts').classList.add('show');
+  $('run').classList.add('show');
+  const list = $('fileList');
+  list.innerHTML = '';
+  speakers.forEach((sp, idx)=>{
+    const item = document.createElement('div');
+    item.className = 'fitem';
+    item.style.borderLeftColor = paletteVar(idx);
+    item.innerHTML = `
+      <div class="meta">
+        <div class="fname">${sp.fname}</div>
+        <div class="labwrap">
+          <span class="labtag">ラベル</span>
+          <input class="lab" type="text" value="${sp.label.replace(/"/g,'&quot;')}">
+          <span class="cap-n">${sp.caps.length}件</span>
+        </div>
+      </div>
+      <button class="rm" title="削除">×</button>`;
+    const input = item.querySelector('.lab');
+    input.addEventListener('input', e=>{ speakers[idx].label = e.target.value; });
+    item.querySelector('.rm').addEventListener('click', ()=>{
+      speakers.splice(idx,1);
+      if(speakers.length){ renderFiles(); }
+      else {
+        $('files').classList.remove('show');
+        $('opts').classList.remove('show');
+        $('run').classList.remove('show');
+        $('result').classList.remove('show');
+        $('fileList').innerHTML='';
+      }
+    });
+    list.appendChild(item);
+  });
+}
+
+// ===== merge =====
+function buildMerged(){
+  const useBlank = $('blank').checked;
+  const useBracket = $('bracket').checked;
+
+  // 全キャプションに話者indexを付けて集約
+  let all = [];
+  speakers.forEach((sp, idx)=>{
+    sp.caps.forEach(c=>{
+      all.push({ ...c, label: sp.label, spIdx: idx });
+    });
+  });
+  // タイムコード順（同時刻は読み込み順＝話者順で安定）
+  all.sort((a,b)=> a.key - b.key);
+
+  const outLines = [];
+  const previewParts = [];
+  all.forEach(c=>{
+    const labelText = useBracket ? `[${c.label}]` : `${c.label}：`;
+    outLines.push(`${c.start} - ${c.end}`);
+    outLines.push(`${labelText} ${c.text}`);
+    if(useBlank) outLines.push('');
+    // preview（色付き・HTMLエスケープ）
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    previewParts.push(
+      `<span class="tc">${c.start} - ${c.end}</span>\n` +
+      `<span class="${paletteClass(c.spIdx)}">${esc(labelText)}</span> ${esc(c.text)}` +
+      (useBlank ? '\n\n' : '\n')
+    );
+  });
+
+  return {
+    text: outLines.join('\r\n'),
+    previewHtml: previewParts.join(''),
+    count: all.length
+  };
+}
+
+$('run').addEventListener('click', ()=>{
+  clearErr();
+  if(!speakers.length){ showErr('ファイルがありません。'); return; }
+  const { text, previewHtml, count } = buildMerged();
+  $('preview').innerHTML = previewHtml;
+  const labels = speakers.map(s=>s.label).join(' / ');
+  $('stat').textContent = `${count} captions ・ ${speakers.length}話者（${labels}）`;
+  $('result').classList.add('show');
+
+  // ダウンロードボタン
+  $('dl').onclick = ()=>{
+    const bom = '\uFEFF';
+    const blob = new Blob([bom+text], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    // 出力ファイル名: 元ファイルの共通部分があれば使う、なければ既定
+    a.href = url;
+    a.download = '統合字幕.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    $('dl').textContent = '保存しました ✓';
+    $('dl').classList.add('done');
+  };
+});
+</script>
+</body>
+</html>
