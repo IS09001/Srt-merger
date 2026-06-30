@@ -216,16 +216,17 @@ h1 .hl{color:var(--acc)}
 <script>
 // ===== パース =====
 // Premiere書き出しtxt: 「TC - TC」行 → テキスト行(1〜複数) → 空行 の繰り返し
-const TC_RE = /^(\d{2}:\d{2}:\d{2}:\d{2})\s*-\s*(\d{2}:\d{2}:\d{2}:\d{2})\s*$/;
+// 区切りはコロン(:)とセミコロン(;)の両方を受ける（ドロップフレーム素材は;表記）
+const TC_RE = /^(\d{2}[:;]\d{2}[:;]\d{2}[:;]\d{2})\s*-\s*(\d{2}[:;]\d{2}[:;]\d{2}[:;]\d{2})\s*$/;
 
 function tcKey(tc){
-  // "HH:MM:SS:FF" → 比較用の数値（fps非依存、同形式同士の順序のみ）
-  const [h,m,s,f] = tc.split(':').map(Number);
-  return ((h*60+m)*60+s)*1000 + f; // フレームは最大99想定、桁衝突しない範囲で十分
+  // "HH:MM:SS:FF" または "HH;MM;SS;FF" → 比較用の数値（区切り問わず、順序のみ）
+  const [h,m,s,f] = tc.split(/[:;]/).map(Number);
+  return ((h*60+m)*60+s)*1000 + f;
 }
 
 function parseTxt(text){
-  const lines = text.replace(/\r\n/g,'\n').replace(/\uFEFF/g,'').split('\n');
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\uFEFF/g,'').split('\n');
   const caps = [];
   let i = 0;
   while(i < lines.length){
@@ -238,7 +239,7 @@ function parseTxt(text){
         body.push(lines[j].trim());
         j++;
       }
-      caps.push({ start, end, text: body.join(''), key: tcKey(start) });
+      caps.push({ start, end, lines: body, key: tcKey(start) });
       i = (j > i+1) ? j : i+1;
     } else {
       i++;
@@ -352,14 +353,18 @@ function buildMerged(){
   const previewParts = [];
   all.forEach(c=>{
     const labelText = useBracket ? `[${c.label}]` : `${c.label}：`;
+    const body = (c.lines && c.lines.length) ? c.lines : [c.text || ''];
+    // 出力: TC行 → ラベル単独行 → 本文各行 → 空行
     outLines.push(`${c.start} - ${c.end}`);
-    outLines.push(`${labelText} ${c.text}`);
+    outLines.push(labelText);
+    body.forEach(ln => outLines.push(ln));
     if(useBlank) outLines.push('');
     // preview（色付き・HTMLエスケープ）
     const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     previewParts.push(
       `<span class="tc">${c.start} - ${c.end}</span>\n` +
-      `<span class="${paletteClass(c.spIdx)}">${esc(labelText)}</span> ${esc(c.text)}` +
+      `<span class="${paletteClass(c.spIdx)}">${esc(labelText)}</span>\n` +
+      body.map(esc).join('\n') +
       (useBlank ? '\n\n' : '\n')
     );
   });
