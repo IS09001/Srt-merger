@@ -235,6 +235,13 @@ function parseTxt(text){
       const start = m[1], end = m[2];
       const body = [];
       let j = i+1;
+      // 本文開始前の空行はスキップ（コピペ等で混入した空改行を許容）
+      // ただし次のタイムコード行に当たったら本文なしと確定して打ち切り
+      while(j < lines.length && lines[j].trim() === '' && !(j+1 < lines.length && TC_RE.test(lines[j+1].trim()))){
+        // 空行の次もまだタイムコードでなければ、本文がこの先にあるとみなして読み飛ばす
+        j++;
+      }
+      // 本文を読む（本文開始後の空行はブロック終端）
       while(j < lines.length && lines[j].trim() !== '' && !TC_RE.test(lines[j].trim())){
         body.push(lines[j].trim());
         j++;
